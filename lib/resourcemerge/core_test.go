@@ -16,14 +16,54 @@ func TestEnsurePodSpec(t *testing.T) {
 
 		expectedModified bool
 		expected         corev1.PodSpec
-	}{{
-		name:     "empty inputs",
-		existing: corev1.PodSpec{},
-		input:    corev1.PodSpec{},
+	}{
+		{
+			name:     "empty inputs",
+			existing: corev1.PodSpec{},
+			input:    corev1.PodSpec{},
 
-		expectedModified: false,
-		expected:         corev1.PodSpec{},
-	}}
+			expectedModified: false,
+			expected:         corev1.PodSpec{},
+		},
+		{
+			name: "remove regular containers from existing",
+			existing: corev1.PodSpec{
+				Containers: []corev1.Container{
+					corev1.Container{Name: "test"}}},
+			input: corev1.PodSpec{},
+
+			expectedModified: true,
+			expected:         corev1.PodSpec{},
+		},
+		{
+			name: "remove regular containers from existing but dont remove init containers",
+			existing: corev1.PodSpec{
+				InitContainers: []corev1.Container{
+					corev1.Container{Name: "test-init"}},
+				Containers: []corev1.Container{
+					corev1.Container{Name: "test"}}},
+			input: corev1.PodSpec{},
+
+			expectedModified: true,
+			expected: corev1.PodSpec{
+				InitContainers: []corev1.Container{
+					corev1.Container{Name: "test-init"}},
+			},
+		},
+		{
+			name: "only init containers",
+			existing: corev1.PodSpec{
+				InitContainers: []corev1.Container{
+					corev1.Container{Name: "test-init"}}},
+			input: corev1.PodSpec{},
+
+			expectedModified: false,
+			expected: corev1.PodSpec{
+				InitContainers: []corev1.Container{
+					corev1.Container{Name: "test-init"}},
+			},
+		},
+	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
