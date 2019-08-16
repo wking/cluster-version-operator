@@ -23,6 +23,7 @@ spec:
           - "start"
           - "--release-image={{.ReleaseImage}}"
           - "--enable-auto-update=false"
+          - "--enable-default-cluster-version={{.Bootstrap|not}}"
           - "--v=4"
         resources:
           requests:

@@ -21,14 +21,13 @@ func Render(outputDir, releaseImage string) error {
 		oManifestsDir = filepath.Join(outputDir, "manifests")
 		bootstrapDir  = "/bootstrap"
 		oBootstrapDir = filepath.Join(outputDir, "bootstrap")
-
-		renderConfig = manifestRenderConfig{ReleaseImage: releaseImage}
 	)
 
 	tasks := []struct {
 		idir      string
 		odir      string
 		skipFiles sets.String
+		bootstrap bool
 	}{{
 		idir: manifestsDir,
 		odir: oManifestsDir,
@@ -42,10 +41,14 @@ func Render(outputDir, releaseImage string) error {
 		idir:      bootstrapDir,
 		odir:      oBootstrapDir,
 		skipFiles: sets.NewString(),
+		bootstrap: true,
 	}}
 	var errs []error
 	for _, task := range tasks {
-		if err := renderDir(renderConfig, task.idir, task.odir, task.skipFiles); err != nil {
+		if err := renderDir(manifestRenderConfig{
+			Bootstrap:    task.bootstrap,
+			ReleaseImage: releaseImage,
+		}, task.idir, task.odir, task.skipFiles); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -102,6 +105,7 @@ func renderDir(renderConfig manifestRenderConfig, idir, odir string, skipFiles s
 }
 
 type manifestRenderConfig struct {
+	Bootstrap    bool
 	ReleaseImage string
 }
 
