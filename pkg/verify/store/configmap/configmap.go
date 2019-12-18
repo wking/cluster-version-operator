@@ -1,4 +1,6 @@
-package verifyconfigmap
+// Package configmap implements a signature store backed by
+// config maps.
+package configmap
 
 import (
 	"context"
@@ -14,6 +16,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/util/retry"
+
+	"github.com/openshift/cluster-version-operator/pkg/verify/store"
 )
 
 // ReleaseLabelConfigMap is a label applied to a configmap inside the
@@ -65,10 +69,10 @@ func (s *Store) mostRecentConfigMaps() []corev1.ConfigMap {
 	return s.last
 }
 
-// DigestSignatures returns a list of signatures that match the request
-// digest out of config maps labelled with ReleaseLabelConfigMap in the
+// Signatures returns a list of signatures that match the request
+// digest out of config maps labeled with ReleaseLabelConfigMap in the
 // openshift-config-managed namespace.
-func (s *Store) DigestSignatures(ctx context.Context, digest string) ([][]byte, error) {
+func (s *Store) Signatures(ctx context.Context, name string, digest string, fn store.Callback) error {
 	// avoid repeatedly reloading config maps
 	items := s.mostRecentConfigMaps()
 	r := s.limiter.Reserve()
@@ -78,24 +82,30 @@ func (s *Store) DigestSignatures(ctx context.Context, digest string) ([][]byte, 
 		})
 		if err != nil {
 			s.rememberMostRecentConfigMaps([]corev1.ConfigMap{})
-			return nil, err
+			_, err := fn(ctx, nil, err)
+			return err
 		}
 		items = configMaps.Items
 		s.rememberMostRecentConfigMaps(configMaps.Items)
 	}
 
-	var signatures [][]byte
 	for _, cm := range items {
 		for k, v := range cm.BinaryData {
 			if strings.HasPrefix(k, digest) {
-				signatures = append(signatures, v)
+				done, err := fn(ctx, v, nil)
+				if done || err != nil {
+					return err
+				}
+				if err := ctx.Err(); err != nil {
+					return err
+				}
 			}
 		}
 	}
-	return signatures, nil
+	return nil
 }
 
-// Store attempts to persist the provided signatures into a form DigestSignatures will
+// Store attempts to persist the provided signatures into a form Signatures will
 // retrieve.
 func (s *Store) Store(ctx context.Context, signaturesByDigest map[string][][]byte) error {
 	cm := &corev1.ConfigMap{

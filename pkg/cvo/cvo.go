@@ -46,7 +46,11 @@ import (
 	"github.com/openshift/cluster-version-operator/pkg/payload/precondition"
 	preconditioncv "github.com/openshift/cluster-version-operator/pkg/payload/precondition/clusterversion"
 	"github.com/openshift/cluster-version-operator/pkg/verify"
-	"github.com/openshift/cluster-version-operator/pkg/verify/verifyconfigmap"
+	"github.com/openshift/cluster-version-operator/pkg/verify/release"
+	"github.com/openshift/cluster-version-operator/pkg/verify/store"
+	"github.com/openshift/cluster-version-operator/pkg/verify/store/configmap"
+	"github.com/openshift/cluster-version-operator/pkg/verify/store/serial"
+	"github.com/openshift/cluster-version-operator/pkg/verify/store/sigstore"
 )
 
 const (
@@ -222,16 +226,6 @@ func New(
 	return optr
 }
 
-// verifyClientBuilder is a wrapper around the operator's HTTPClient method.
-// It is used by the releaseVerifier to get an up-to-date http client.
-type verifyClientBuilder struct {
-	builder func() (*http.Client, error)
-}
-
-func (vcb *verifyClientBuilder) HTTPClient() (*http.Client, error) {
-	return vcb.builder()
-}
-
 // InitializeFromPayload retrieves the payload contents and verifies the initial state, then configures the
 // controller that loads and applies content to the cluster. It returns an error if the payload appears to
 // be in error rather than continuing.
@@ -248,15 +242,13 @@ func (optr *Operator) InitializeFromPayload(restConfig *rest.Config, burstRestCo
 	optr.releaseCreated = update.ImageRef.CreationTimestamp.Time
 	optr.releaseVersion = update.ImageRef.Name
 
-	// Wraps operator's HTTPClient method to allow releaseVerifier to create http client with up-to-date config.
-	clientBuilder := &verifyClientBuilder{builder: optr.HTTPClient}
 	configClient, err := coreclientsetv1.NewForConfig(restConfig)
 	if err != nil {
 		return fmt.Errorf("unable to create a configuration client: %v", err)
 	}
 
 	// attempt to load a verifier as defined in the payload
-	verifier, signatureStore, err := loadConfigMapVerifierDataFromUpdate(update, clientBuilder, configClient)
+	verifier, signatureStore, err := loadConfigMapVerifierDataFromUpdate(update, optr.HTTPClient, configClient)
 	if err != nil {
 		return err
 	}
@@ -291,13 +283,13 @@ func (optr *Operator) InitializeFromPayload(restConfig *rest.Config, burstRestCo
 // It returns an error if the data is not valid, or no verifier if no config map is found. See the verify
 // package for more details on the algorithm for verification. If the annotation is set, a verifier or error
 // is always returned.
-func loadConfigMapVerifierDataFromUpdate(update *payload.Update, clientBuilder verify.ClientBuilder, configMapClient coreclientsetv1.ConfigMapsGetter) (verify.Interface, *verify.StorePersister, error) {
+func loadConfigMapVerifierDataFromUpdate(update *payload.Update, clientBuilder sigstore.HTTPClient, configMapClient coreclientsetv1.ConfigMapsGetter) (verify.Interface, *verify.StorePersister, error) {
 	configMapGVK := corev1.SchemeGroupVersion.WithKind("ConfigMap")
 	for _, manifest := range update.Manifests {
 		if manifest.GVK != configMapGVK {
 			continue
 		}
-		if _, ok := manifest.Obj.GetAnnotations()[verify.ReleaseAnnotationConfigMapVerifier]; !ok {
+		if _, ok := manifest.Obj.GetAnnotations()[release.ReleaseAnnotationConfigMapVerifier]; !ok {
 			continue
 		}
 		src := fmt.Sprintf("the config map %s/%s", manifest.Obj.GetNamespace(), manifest.Obj.GetName())
@@ -305,17 +297,22 @@ func loadConfigMapVerifierDataFromUpdate(update *payload.Update, clientBuilder v
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "%s is not valid: %v", src, err)
 		}
-		verifier, err := verify.NewFromConfigMapData(src, data, clientBuilder)
+		verifier, err := release.NewFromMap(src, data, clientBuilder)
 		if err != nil {
 			return nil, nil, err
 		}
 
 		// allow the verifier to consult the cluster for signature data, and also configure
 		// a process that writes signatures back to that store
-		signatureStore := verifyconfigmap.NewStore(configMapClient, nil)
-		verifier = verifier.WithStores(signatureStore)
-		persister := verify.NewSignatureStorePersister(signatureStore, verifier)
-		return verifier, persister, nil
+		configMapSignatureStore := configmap.NewStore(configMapClient, nil)
+		verifier.Store = &serial.Store{
+			Stores: []store.Store{
+				configMapSignatureStore,
+				verifier.Store,
+			},
+		}
+		//FIXMEpersister := verify.NewSignatureStorePersister(signatureStore, verifier)
+		return verifier, nil, nil //persister, nil
 	}
 	return nil, nil, nil
 }
