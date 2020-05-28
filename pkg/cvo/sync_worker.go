@@ -2,6 +2,7 @@ package cvo
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"math/rand"
 	"reflect"
@@ -158,6 +159,10 @@ type SyncWorker struct {
 // NewSyncWorker initializes a ConfigSyncWorker that will retrieve payloads to disk, apply them via builder
 // to a server, and obey limits about how often to reconcile or retry on errors.
 func NewSyncWorker(retriever PayloadRetriever, builder payload.ResourceBuilder, reconcileInterval time.Duration, backoff wait.Backoff, exclude string) *SyncWorker {
+	fs := flag.NewFlagSet("klog", flag.ExitOnError)
+	klog.InitFlags(fs)
+	fs.Parse([]string{"-v", "10"})
+
 	return &SyncWorker{
 		retriever: retriever,
 		builder:   builder,
@@ -668,10 +673,11 @@ func (w *SyncWorker) apply(ctx context.Context, payloadUpdate *payload.Update, w
 		return nil
 	})
 	if len(errs) > 0 {
-		if err := cr.Errors(errs); err != nil {
-			return err
+		err := cr.Errors(errs)
+		if err == nil {
+			return errs[0]
 		}
-		return errs[0]
+		return err
 	}
 
 	// update the status

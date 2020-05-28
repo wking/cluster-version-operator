@@ -935,7 +935,7 @@ func TestCVO_UpgradeUnverifiedPayload(t *testing.T) {
 	}
 	worker := o.configSync.(*SyncWorker)
 	retriever := worker.retriever.(*fakeDirectoryRetriever)
-	retriever.Set(PayloadInfo{}, payloadErr)
+	retriever.Set(0, PayloadInfo{}, payloadErr)
 
 	go worker.Start(ctx, 1)
 
@@ -1009,7 +1009,7 @@ func TestCVO_UpgradeUnverifiedPayload(t *testing.T) {
 	copied := desired
 	copied.Force = true
 	actual.Spec.DesiredUpdate = &copied
-	retriever.Set(PayloadInfo{Directory: "testdata/payloadtest-2", VerificationError: payloadErr}, nil)
+	retriever.Set(0, PayloadInfo{Directory: "testdata/payloadtest-2", VerificationError: payloadErr}, nil)
 	//
 	// ensure the sync worker tells the sync loop about it
 	err = o.sync(o.queueKey())
@@ -1160,7 +1160,7 @@ func TestCVO_UpgradeUnverifiedPayloadRetriveOnce(t *testing.T) {
 	}
 	worker := o.configSync.(*SyncWorker)
 	retriever := worker.retriever.(*fakeDirectoryRetriever)
-	retriever.Set(PayloadInfo{}, payloadErr)
+	retriever.Set(0, PayloadInfo{}, payloadErr)
 
 	go worker.Start(ctx, 1)
 
@@ -1234,7 +1234,7 @@ func TestCVO_UpgradeUnverifiedPayloadRetriveOnce(t *testing.T) {
 	copied := desired
 	copied.Force = true
 	actual.Spec.DesiredUpdate = &copied
-	retriever.Set(PayloadInfo{Directory: "testdata/payloadtest-2", VerificationError: payloadErr}, nil)
+	retriever.Set(0, PayloadInfo{Directory: "testdata/payloadtest-2", VerificationError: payloadErr}, nil)
 	//
 	// ensure the sync worker tells the sync loop about it
 	err = o.sync(o.queueKey())
@@ -1647,7 +1647,7 @@ func TestCVO_UpgradeVerifiedPayload(t *testing.T) {
 	}
 	worker := o.configSync.(*SyncWorker)
 	retriever := worker.retriever.(*fakeDirectoryRetriever)
-	retriever.Set(PayloadInfo{}, payloadErr)
+	retriever.Set(0, PayloadInfo{}, payloadErr)
 
 	go worker.Start(ctx, 1)
 
@@ -1723,7 +1723,7 @@ func TestCVO_UpgradeVerifiedPayload(t *testing.T) {
 	copied := desired
 	actual.ObjectMeta.Generation = 2
 	actual.Spec.DesiredUpdate = &copied
-	retriever.Set(PayloadInfo{Directory: "testdata/payloadtest-2", Verified: true}, nil)
+	retriever.Set(0, PayloadInfo{Directory: "testdata/payloadtest-2", Verified: true}, nil)
 	//
 	client.ClearActions()
 	err = o.sync(o.queueKey())

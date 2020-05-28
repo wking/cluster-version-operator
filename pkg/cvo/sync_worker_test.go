@@ -1,11 +1,20 @@
 package cvo
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/wait"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
+
 	configv1 "github.com/openshift/api/config/v1"
+
+	"github.com/openshift/cluster-version-operator/pkg/payload"
 )
 
 func Test_statusWrapper_ReportProgress(t *testing.T) {
@@ -184,5 +193,38 @@ func Test_runThrottledStatusNotifier(t *testing.T) {
 	case <-out:
 		t.Fatalf("should have throttled")
 	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+func Test_syncWorker_Start(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+
+	dynamicScheme := runtime.NewScheme()
+	//dynamicScheme.AddKnownTypeWithName(schema.GroupVersionKind{Group: "test.cvo.io", Version: "v1", Kind: "TestA"}, &unstructured.Unstructured{})
+	dynamicScheme.AddKnownTypeWithName(schema.GroupVersionKind{Group: "test.cvo.io", Version: "v1", Kind: "TestB"}, &unstructured.Unstructured{})
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(dynamicScheme)
+
+	worker := NewSyncWorker(
+		&fakeDirectoryRetriever{
+			Delay: 2*time.Second, // longer than WithTimeout
+			Info: PayloadInfo{Directory: "testdata/payloadtest"},
+		},
+		&testResourceBuilder{client: dynamicClient},
+		time.Second/4,
+		wait.Backoff{},
+		"",
+	)
+
+	done := make(chan struct{}, 1)
+	go func() {
+		worker.Start(ctx, 3)
+		done <- struct{}{}
+	}()
+	worker.Update(1, configv1.Update{Image: "testing", Force: true}, nil, payload.UpdatingPayload)
+	<- done
+	fmt.Printf("here we are %v\n", worker.status)
+	if worker.status.Reconciling {
+		t.Fatal("sync worker should not be reconciling after a slow retrieval")
 	}
 }

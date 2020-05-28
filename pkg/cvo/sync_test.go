@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/davecgh/go-spew/spew"
 
@@ -407,13 +408,15 @@ func (b *fakeResourceBuilder) Apply(m *lib.Manifest) error {
 type fakeDirectoryRetriever struct {
 	lock sync.Mutex
 
-	Info PayloadInfo
-	Err  error
+	Delay time.Duration
+	Info  PayloadInfo
+	Err   error
 }
 
-func (r *fakeDirectoryRetriever) Set(info PayloadInfo, err error) {
+func (r *fakeDirectoryRetriever) Set(delay time.Duration, info PayloadInfo, err error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
+	r.Delay = delay
 	r.Info = info
 	r.Err = err
 }
@@ -421,6 +424,7 @@ func (r *fakeDirectoryRetriever) Set(info PayloadInfo, err error) {
 func (r *fakeDirectoryRetriever) RetrievePayload(ctx context.Context, update configv1.Update) (PayloadInfo, error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
+	time.Sleep(r.Delay)
 	return r.Info, r.Err
 }
 
