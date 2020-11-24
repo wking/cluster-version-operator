@@ -195,11 +195,6 @@ func SummaryForReason(reason, name string) string {
 	case "UpgradePreconditionCheckFailed":
 		return "it may not be safe to apply this update"
 
-	case "ClusterOperatorDegraded":
-		if len(name) > 0 {
-			return fmt.Sprintf("the cluster operator %s is degraded", name)
-		}
-		return "a cluster operator is degraded"
 	case "ClusterOperatorNotAvailable":
 		if len(name) > 0 {
 			return fmt.Sprintf("the cluster operator %s has not yet successfully rolled out", name)

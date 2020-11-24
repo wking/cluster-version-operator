@@ -315,9 +315,9 @@ func Test_waitForOperatorStatusToBeDone(t *testing.T) {
 			},
 		},
 		expErr: &payload.UpdateError{
-			Nested:  fmt.Errorf("cluster operator test-co is reporting a failure: random error"),
-			Reason:  "ClusterOperatorDegraded",
-			Message: "Cluster operator test-co is reporting a failure: random error",
+			Nested:  fmt.Errorf("cluster operator test-co is not done; it is available=false, progressing=true, degraded=true"),
+			Reason:  "ClusterOperatorNotAvailable",
+			Message: "Cluster operator test-co has not yet reported success",
 			Name:    "test-co",
 		},
 	}, {
@@ -343,12 +343,6 @@ func Test_waitForOperatorStatusToBeDone(t *testing.T) {
 				}},
 			},
 		},
-		expErr: &payload.UpdateError{
-			Nested:  fmt.Errorf("cluster operator test-co is not done; it is available=true, progressing=true, degraded=true"),
-			Reason:  "ClusterOperatorNotAvailable",
-			Message: "Cluster operator test-co has not yet reported success",
-			Name:    "test-co",
-		},
 	}, {
 		name: "cluster operator reporting available=true degraded=true",
 		actual: &configv1.ClusterOperator{
@@ -371,12 +365,6 @@ func Test_waitForOperatorStatusToBeDone(t *testing.T) {
 					Name: "operand-1", Version: "v1",
 				}},
 			},
-		},
-		expErr: &payload.UpdateError{
-			Nested:  fmt.Errorf("cluster operator test-co is reporting a failure: random error"),
-			Reason:  "ClusterOperatorDegraded",
-			Message: "Cluster operator test-co is reporting a failure: random error",
-			Name:    "test-co",
 		},
 	}, {
 		name: "cluster operator reporting available=true progressing=true degraded=true",
@@ -401,12 +389,6 @@ func Test_waitForOperatorStatusToBeDone(t *testing.T) {
 				}},
 			},
 		},
-		expErr: &payload.UpdateError{
-			Nested:  fmt.Errorf("cluster operator test-co is reporting a failure: random error"),
-			Reason:  "ClusterOperatorDegraded",
-			Message: "Cluster operator test-co is reporting a failure: random error",
-			Name:    "test-co",
-		},
 	}, {
 		name: "cluster operator reporting available=true no progressing or degraded",
 		actual: &configv1.ClusterOperator{
@@ -429,12 +411,6 @@ func Test_waitForOperatorStatusToBeDone(t *testing.T) {
 					Name: "operand-1", Version: "v1",
 				}},
 			},
-		},
-		expErr: &payload.UpdateError{
-			Nested:  fmt.Errorf("cluster operator test-co is not done; it is available=true, progressing=true, degraded=true"),
-			Reason:  "ClusterOperatorNotAvailable",
-			Message: "Cluster operator test-co has not yet reported success",
-			Name:    "test-co",
 		},
 	}, {
 		name: "cluster operator reporting available=true progressing=false degraded=false",

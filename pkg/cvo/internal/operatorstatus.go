@@ -169,63 +169,23 @@ func waitForOperatorStatusToBeDone(ctx context.Context, interval time.Duration, 
 		}
 
 		available := false
+		degraded := true
 		progressing := true
-		failing := true
-		var failingCondition *configv1.ClusterOperatorStatusCondition
-		degradedValue := true
-		var degradedCondition *configv1.ClusterOperatorStatusCondition
 		for i := range actual.Status.Conditions {
 			condition := &actual.Status.Conditions[i]
 			switch {
 			case condition.Type == configv1.OperatorAvailable && condition.Status == configv1.ConditionTrue:
 				available = true
+			case condition.Type == configv1.OperatorDegraded && condition.Status == configv1.ConditionFalse:
+				degraded = false
 			case condition.Type == configv1.OperatorProgressing && condition.Status == configv1.ConditionFalse:
 				progressing = false
-			case condition.Type == configv1.OperatorDegraded:
-				if condition.Status == configv1.ConditionFalse {
-					degradedValue = false
-				}
-				degradedCondition = condition
 			}
 		}
 
-		// If degraded was an explicitly set condition, use that. If not, use the deprecated failing.
-		degraded := failing
-		if degradedCondition != nil {
-			degraded = degradedValue
-		}
-
-		switch mode {
-		case resourcebuilder.InitializingMode:
-			// during initialization we allow degraded as long as the component goes available
-			if available && (!progressing || len(expected.Status.Versions) > 0) {
-				return true, nil
-			}
-		default:
-			// if we're at the correct version, and available, and not degraded, we are done
-			// if we're available, not degraded, and not progressing, we're also done
-			// TODO: remove progressing once all cluster operators report expected versions
-			if available && (!progressing || len(expected.Status.Versions) > 0) && !degraded {
-				return true, nil
-			}
-		}
-
-		condition := failingCondition
-		if degradedCondition != nil {
-			condition = degradedCondition
-		}
-		if condition != nil && condition.Status == configv1.ConditionTrue {
-			message := fmt.Sprintf("Cluster operator %s is reporting a failure", actual.Name)
-			if len(condition.Message) > 0 {
-				message = fmt.Sprintf("Cluster operator %s is reporting a failure: %s", actual.Name, condition.Message)
-			}
-			lastErr = &payload.UpdateError{
-				Nested:  errors.New(lowerFirst(message)),
-				Reason:  "ClusterOperatorDegraded",
-				Message: message,
-				Name:    actual.Name,
-			}
-			return false, nil
+		// TODO: remove progressing once all cluster operators report expected versions
+		if available && (!progressing || len(expected.Status.Versions) > 0) {
+			return true, nil
 		}
 
 		lastErr = &payload.UpdateError{

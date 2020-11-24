@@ -135,7 +135,6 @@ The ClusterOperator builder only monitors the in-cluster object and blocks until
     would block until the in-cluster ClusterOperator reported `operator` at version 4.1.0.
 
     The progressing check is deprecated and will be removed once all operators are reporting versions.
-* Not degraded (except during initialization, where we ignore the degraded status)
 
 ### CustomResourceDefinition
 
