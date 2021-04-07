@@ -110,6 +110,7 @@ type Operator struct {
 	coLister              configlistersv1.ClusterOperatorLister
 	cmConfigLister        listerscorev1.ConfigMapNamespaceLister
 	cmConfigManagedLister listerscorev1.ConfigMapNamespaceLister
+	nodeLister            listerscorev1.NodeLister
 	proxyLister           configlistersv1.ProxyLister
 	cacheSynced           []cache.InformerSynced
 
@@ -164,6 +165,7 @@ func New(
 	coInformer configinformersv1.ClusterOperatorInformer,
 	cmConfigInformer informerscorev1.ConfigMapInformer,
 	cmConfigManagedInformer informerscorev1.ConfigMapInformer,
+	nodeInformer informerscorev1.NodeInformer,
 	proxyInformer configinformersv1.ProxyInformer,
 	client clientset.Interface,
 	kubeClient kubernetes.Interface,
@@ -210,8 +212,16 @@ func New(
 	optr.cacheSynced = append(optr.cacheSynced, cvInformer.Informer().HasSynced)
 
 	optr.proxyLister = proxyInformer.Lister()
+	optr.cacheSynced = append(optr.cacheSynced, proxyInformer.Informer().HasSynced)
+
 	optr.cmConfigLister = cmConfigInformer.Lister().ConfigMaps(internal.ConfigNamespace)
+	optr.cacheSynced = append(optr.cacheSynced, cmConfigInformer.Informer().HasSynced)
+
 	optr.cmConfigManagedLister = cmConfigManagedInformer.Lister().ConfigMaps(internal.ConfigManagedNamespace)
+	optr.cacheSynced = append(optr.cacheSynced, cmConfigManagedInformer.Informer().HasSynced)
+
+	optr.nodeLister = nodeInformer.Lister()
+	optr.cacheSynced = append(optr.cacheSynced, nodeInformer.Informer().HasSynced)
 
 	// make sure this is initialized after all the listers are initialized
 	optr.upgradeableChecks = optr.defaultUpgradeableChecks()

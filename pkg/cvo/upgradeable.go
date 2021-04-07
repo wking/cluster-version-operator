@@ -2,6 +2,7 @@ package cvo
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -14,10 +15,13 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/klog/v2"
 
 	"github.com/openshift/cluster-version-operator/lib/resourcemerge"
 )
+
+var kubeletVersionRegexp = regexp.MustCompile(`^v?(\d+)[.](\d+)[.].*`)
 
 // syncUpgradeable. The status is only checked if it has been more than
 // the minimumUpdateCheckInterval since the last check.
@@ -215,9 +219,86 @@ func (check *clusterVersionOverridesUpgradeable) Check() *configv1.ClusterOperat
 	return cond
 }
 
+type nodesUpgradeable struct {
+	nodeLister corev1.
+
+vendor/k8s.io/client-go/kubernetes/typed/core/v1/node.go:func
+}
+
+func (check *nodesUpgradeable) Check() *configv1.ClusterOperatorStatusCondition {
+	cond := &configv1.ClusterOperatorStatusCondition{
+		Type:   configv1.ClusterStatusConditionType("UpgradeableNodes"),
+		Status: configv1.ConditionFalse,
+	}
+
+	nodes, err := check.nodeLister.List(labels.Everything())
+	if meta.IsNoMatchError(err) {
+		return nil
+	}
+	if err != nil {
+		cond.Reason = "FailedToListNodes"
+		cond.Message = fmt.Sprintf("failed to list nodes: %s", err)
+		return cond
+	}
+
+	var oldestKubelet struct {
+		node    string
+		version string
+		major   int
+		minor   int
+	}
+	for _, node := range node {
+		major, minor, err := check.parseVersion(node.Status.NodeInfo.KubeletVersion)
+		if err != nil {
+			klog.V(4).Infof("node %s has unrecognized kubelet version: %s  It will not result in UpgradeableNodes=False, but updates may result in incompatibility", node.Name, err)
+			continue
+		}
+		if oldestKubelet.node == "" ||
+			major < oldestKubelet.major ||
+			(major == oldestKubelet.major && minor < oldestKubelet.minor) {
+			oldestKubelet.node == node.Name
+			oldestKubelet.version == node.Status.NodeInfo.KubeletVersion
+			oldestKubelet.major = major
+			oldestKubelet.minor = minor
+		}
+	}
+
+	if oldestKubelet.major < 1 || oldestKubelet.minor < 20 {
+		cond.Reason = "KubeletVersionSkew"
+		cond.Message = fmt.Sprintf("node %s has kubelet version %s, but an update to the next minor OpenShift release requires all kubelet to be v1.20 or newer")
+		return cond
+	}
+
+	return nil
+}
+
+func (check *nodesUpgradeable) parseVersion(version string) (major int, minor int, err error) {
+	if version == "" {
+		return 0, 0, fmt.Errorf("empty version")
+	}
+
+	match := kubeletVersionRegexp.FindStringSubmatch("version")
+	if len(match) != 2 {
+		return 0, 0, fmt.Errorf("unrecognized version format: %s", version)
+	}
+
+	major, err := strconv.Atoi(match[0])
+	if err != nil {
+		return 0, 0, fmt.Errorf("unrecognized major version format: %s: %s", version, err)
+	}
+
+	minor, err := strconv.Atoi(match[1])
+	if err != nil {
+		return 0, 0, fmt.Errorf("unrecognized minor version format: %s: %s", version, err)
+	}
+
+	return major, minor, nil
+}
+
 func (optr *Operator) defaultUpgradeableChecks() []upgradeableCheck {
 	return []upgradeableCheck{
 		&clusterOperatorsUpgradeable{coLister: optr.coLister},
 		&clusterVersionOverridesUpgradeable{name: optr.name, cvLister: optr.cvLister},
+		&nodesUpgradeable{nodeLister: optr.nodeLister},
 	}
 }

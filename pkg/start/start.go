@@ -216,6 +216,7 @@ func (o *Options) run(ctx context.Context, controllerCtx *Context, lock *resourc
 	controllerCtx.CVInformerFactory.Start(informersDone)
 	controllerCtx.OpenshiftConfigInformerFactory.Start(informersDone)
 	controllerCtx.OpenshiftConfigManagedInformerFactory.Start(informersDone)
+	controllerCtx.NodeInformerFactory.Start(informersDone)
 	controllerCtx.InformerFactory.Start(informersDone)
 
 	resultChannelCount++
@@ -408,6 +409,7 @@ type Context struct {
 	CVInformerFactory                     externalversions.SharedInformerFactory
 	OpenshiftConfigInformerFactory        informers.SharedInformerFactory
 	OpenshiftConfigManagedInformerFactory informers.SharedInformerFactory
+	NodeInformerFactory                   informers.SharedInformerFactory
 	InformerFactory                       externalversions.SharedInformerFactory
 }
 
@@ -422,6 +424,7 @@ func (o *Options) NewControllerContext(cb *ClientBuilder) *Context {
 	})
 	openshiftConfigInformer := informers.NewSharedInformerFactoryWithOptions(kubeClient, resyncPeriod(o.ResyncInterval)(), informers.WithNamespace(internal.ConfigNamespace))
 	openshiftConfigManagedInformer := informers.NewSharedInformerFactoryWithOptions(kubeClient, resyncPeriod(o.ResyncInterval)(), informers.WithNamespace(internal.ConfigManagedNamespace))
+	nodeInformer := informers.NewSharedInformerFactoryWithOptions(kubeClient, resyncPeriod(o.ResyncInterval)())
 
 	sharedInformers := externalversions.NewSharedInformerFactory(client, resyncPeriod(o.ResyncInterval)())
 
@@ -430,6 +433,7 @@ func (o *Options) NewControllerContext(cb *ClientBuilder) *Context {
 		CVInformerFactory:                     cvInformer,
 		OpenshiftConfigInformerFactory:        openshiftConfigInformer,
 		OpenshiftConfigManagedInformerFactory: openshiftConfigManagedInformer,
+		NodeInformerFactory:                   nodeInformer,
 		InformerFactory:                       sharedInformers,
 
 		CVO: cvo.New(
@@ -443,6 +447,7 @@ func (o *Options) NewControllerContext(cb *ClientBuilder) *Context {
 			coInformer,
 			openshiftConfigInformer.Core().V1().ConfigMaps(),
 			openshiftConfigManagedInformer.Core().V1().ConfigMaps(),
+			nodeInformer.Core().V1().Nodes(),
 			sharedInformers.Config().V1().Proxies(),
 			cb.ClientOrDie(o.Namespace),
 			cb.KubeClientOrDie(o.Namespace, useProtobuf),
