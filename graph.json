@@ -1,0 +1,14 @@
+{
+  "edges": [
+    [0, 1]
+  ],
+  "nodes": [
+    {
+      "payload": "quay.io/openshift-release-dev/ocp-release@sha256:FIXME-match-your-digest",
+      "version": "4.10.0-FIXME-match-your-version"
+    },
+    {
+      "payload": "quay.io/openshift-release-dev/ocp-release@sha256:e867135cd5a09192635b46ccab6ca7543e642378dc72fa22ea54961b05e322f2",
+      "version": "4.10.0-testing"
+    }
+}
