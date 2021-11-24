@@ -858,6 +858,7 @@ func (optr *Operator) defaultPreconditionChecks() precondition.List {
 	return []precondition.Precondition{
 		preconditioncv.NewUpgradeable(optr.cvLister),
 		preconditioncv.NewRecentEtcdBackup(optr.cvLister, optr.coLister),
+		preconditioncv.NewRecommendedUpdate(),
 	}
 }
 

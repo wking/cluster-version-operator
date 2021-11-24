@@ -2,34 +2,68 @@ package precondition
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
+
+	"github.com/davecgh/go-spew/spew"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+
+	"github.com/openshift/cluster-version-operator/pkg/payload"
 )
 
 func TestSummarize(t *testing.T) {
 	tests := []struct {
-		input []error
-		exp   string
+		name     string
+		input    []error
+		expWarn  error
+		expBlock error
 	}{{
+		name: "nil",
 		input: nil,
 	}, {
+		name:  "empty slice", 
 		input: []error{},
 	}, {
+		name:  "unrecognized error type",
 		input: []error{fmt.Errorf("random error")},
-		exp:   "random error",
+		expBlock: &payload.UpdateError{
+			Nested:  fmt.Errorf("random error"),
+			Reason:  "UpgradePreconditionCheckFailed",
+			Message: "random error",
+			Name:    "PreconditionCheck",
+		},
 	}, {
+		name:  "single feature gate failure",
 		input: []error{&Error{
 			Nested:  nil,
 			Reason:  "NotAllowedFeatureGateSet",
 			Message: "Feature Gate random is set for the cluster. This Feature Gate turns on features that are not part of the normal supported platform.",
 			Name:    "FeatureGate",
 		}},
-		exp: `Precondition "FeatureGate" failed because of "NotAllowedFeatureGateSet": Feature Gate random is set for the cluster. This Feature Gate turns on features that are not part of the normal supported platform.`,
+		expBlock: &payload.UpdateError{
+			Nested:  &Error{
+				Nested:  nil,
+				Reason:  "NotAllowedFeatureGateSet",
+				Message: "Feature Gate random is set for the cluster. This Feature Gate turns on features that are not part of the normal supported platform.",
+				Name:    "FeatureGate",
+			},
+			Reason:  "NotAllowedFeatureGateSet",
+			Message: `Feature Gate random is set for the cluster. This Feature Gate turns on features that are not part of the normal supported platform.`,
+			Name:    "FeatureGate",
+		},
 	}, {
-		input: []error{fmt.Errorf("random error"), fmt.Errorf("random error 2")},
-		exp: `Multiple precondition checks failed:
-* random error
+		name:  "multiple, unrecognized error types",
+		input: []error{fmt.Errorf("random error 1"), fmt.Errorf("random error 2")},
+		expBlock: &payload.UpdateError{
+			Nested:  utilerrors.NewAggregate([]error{fmt.Errorf("random error 1"), fmt.Errorf("random error 2")}),
+			Reason:  "UpgradePreconditionCheckFailed",
+			Message: `Multiple precondition checks failed:
+* random error 1
 * random error 2`,
+			Name:    "PreconditionCheck",
+		},
 	}, {
+		name:  []...
 		input: []error{&Error{
 			Nested:  nil,
 			Reason:  "NotAllowedFeatureGateSet",
@@ -44,6 +78,7 @@ func TestSummarize(t *testing.T) {
 		exp: `Multiple precondition checks failed:
 * Precondition "FeatureGate" failed because of "NotAllowedFeatureGateSet": Feature Gate random is set for the cluster. This Feature Gate turns on features that are not part of the normal supported platform.
 * Precondition "FeatureGate" failed because of "NotAllowedFeatureGateSet": Feature Gate random-2 is set for the cluster. This Feature Gate turns on features that are not part of the normal supported platform.`,
+/*
 	}, {
 		input: []error{
 			fmt.Errorf("random error"),
@@ -56,20 +91,16 @@ func TestSummarize(t *testing.T) {
 		exp: `Multiple precondition checks failed:
 * random error
 * Precondition "FeatureGate" failed because of "NotAllowedFeatureGateSet": Feature Gate random is set for the cluster. This Feature Gate turns on features that are not part of the normal supported platform.`,
+*/
 	}}
 	for _, test := range tests {
-		t.Run("", func(t *testing.T) {
-			err := Summarize(test.input)
-			if test.exp == "" {
-				if err != nil {
-					t.Fatalf("expected no error, got %v", err)
-				}
-			} else {
-				if err == nil {
-					t.Fatalf("expected err %s, got nil", test.exp)
-				} else if err.Error() != test.exp {
-					t.Fatalf("expected err %s, got %s", test.exp, err.Error())
-				}
+		t.Run(test.name, func(t *testing.T) {
+			warn, block := Summarize(test.input)
+			if !reflect.DeepEqual(warn, test.expWarn) {
+				t.Errorf("expected warning: %s got: %s", spew.Sdump(test.expWarn), spew.Sdump(warn))
+			}
+			if !reflect.DeepEqual(block, test.expBlock) {
+				t.Errorf("expected block: %s got: %s", spew.Sdump(test.expBlock), spew.Sdump(block))
 			}
 		})
 	}
